@@ -1,161 +1,213 @@
-import React, { useState } from 'react'
-import logo from '../../assets/logo.png'
+import React, { useState } from "react";
+import logo from "../../assets/logo.png";
 import { MdOutlineEmail, MdErrorOutline } from "react-icons/md";
 import { CiLock, CiUnlock } from "react-icons/ci";
-import { Link, useNavigate } from 'react-router-dom';
-import { GoogleAuthProvider, getAuth, signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { ToastContainer, toast } from 'react-toastify';
+import { Link, useNavigate } from "react-router-dom";
+import {
+  GoogleAuthProvider,
+  getAuth,
+  getRedirectResult,
+  signInWithEmailAndPassword,
+  signInWithRedirect,
+} from "firebase/auth";
+import { ToastContainer, toast } from "react-toastify";
 import { FcGoogle } from "react-icons/fc";
-import 'react-toastify/dist/ReactToastify.css';
-import { useDispatch } from 'react-redux';
-import { userLoginInfo } from '../../slice/userSlice';
-import { Rings } from 'react-loader-spinner'
+import "react-toastify/dist/ReactToastify.css";
+import { useDispatch } from "react-redux";
+import { userLoginInfo } from "../../slice/userSlice";
+import { Rings } from "react-loader-spinner";
+import { useEffect } from "react";
 
 const Login = () => {
-    const auth = getAuth();
-    const dispatch = useDispatch()
-    const provider = new GoogleAuthProvider();
-    const navigate = useNavigate()
-    const [email, setEmail] = useState('')
-    const [password, setPassword] = useState('')
-    const [lock, setLock] = useState(false)
-    const [loading, setLoading] = useState(false)
-    const [emailError, setEmailError] = useState('')
-    const [passwordError, setPasswordError] = useState('')
-    const [emailPasswordError, setEmailPasswordError] = useState('')
+  const auth = getAuth();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-    const handleEmail = (e) => {
-        setEmail(e.target.value)
-        setEmailError("")
-    }
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
 
-    const handlepassword = (e) => {
-        setPassword(e.target.value)
-        setPasswordError("")
-    }
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({});
+  const [lock, setLock] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-    const hanleLock = () => {
-        setLock(!lock)
-    }
-    const handleGoole = () => {
-        signInWithPopup(auth, provider)
-            .then(() => {
-                setTimeout(() => {
-                    navigate("/")
-                })
-            })
-    }
-    const handleSubmit = () => {
-        if (!email) {
-            setEmailError("Required")
-        } else {
-            if (!/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(email)) {
-                setEmailError("Enter Your Valid Email Address");
-            }
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setErrors({ ...errors, [e.target.name]: "" });
+  };
+
+  const handleGoogle = () => {
+    signInWithRedirect(auth, provider);
+
+    setTimeout(() => navigate("/"), 1500);
+  };
+
+
+  useEffect(() => {
+  getRedirectResult(auth)
+    .then((result) => {
+      if (result?.user) {
+        // Save user data
+        dispatch(userLoginInfo(result.user));
+        localStorage.setItem("userLoginInfo", JSON.stringify(result.user));
+        
+        // Navigate home
+        navigate("/");
+      }
+    })
+    .catch((error) => {
+      console.error("Google Redirect Error:", error);
+    });
+}, []);
+
+  const validate = () => {
+    let temp = {};
+
+    if (!form.email) temp.email = "Email is required";
+    else if (!/^\S+@\S+\.\S+$/.test(form.email))
+      temp.email = "Enter a valid email";
+
+    if (!form.password) temp.password = "Password is required";
+    else if (form.password.length < 8)
+      temp.password = "Minimum 8 characters required";
+
+    setErrors(temp);
+    return Object.keys(temp).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (!validate()) return;
+
+    setLoading(true);
+
+    signInWithEmailAndPassword(auth, form.email, form.password)
+      .then((result) => {
+        toast.success("Login Successful!");
+
+        dispatch(userLoginInfo(result.user));
+        localStorage.setItem("userLoginInfo", JSON.stringify(result.user));
+
+        setTimeout(() => navigate("/"), 1500);
+      })
+      .catch((err) => {
+        if (err.code.includes("invalid-credential")) {
+          setErrors({ form: "Invalid email or password" });
         }
-        if (!password) {
-            setPasswordError("Required")
-        } else {
-            if (!/^(?=.*[0-9]).{8,16}$/.test(password)) {
-                setPasswordError("Please Enter At Least 8 Characters")
-            }
-        }
-        if (email && password && /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(email) && /^(?=.*[0-9]).{8,16}$/.test(password)) {
-            signInWithEmailAndPassword(auth, email, password)
-                .then((user) => {
-                    toast.success("LoginSuccessfully!")
-                    dispatch(userLoginInfo(user.user))
-                    localStorage.setItem("userLoginInfo", JSON.stringify(user.user))
-                    setTimeout(() => {
-                        navigate('/')
-                        }, 3000)
-                    setLoading(true)
-                }).catch((error) => {
-                    if (error.code.includes('auth/invalid-credential')) {
-                        setEmailPasswordError("Invalid-credential");
-                    }
-                });
-        }
-    }
-    return (
-        <>
-            <section className='md:h-screen bg-primary'>
-                <div className="text-center py-16">
-                    <ToastContainer position="top-center" theme="dark" closeOnClick />
-                    <div className="w-[120px] mx-auto">
-                        <img src={logo} alt="logo" />
-                    </div>
-                    <div className="md:mt-8 mt-4">
-                        <h1 className='font-public font-semibold text-xl text-[#343a40]'>Sign in</h1>
-                        <p className='font-public font-light text-base mt-2 text-[#7a7f9a]'>Sign in to continue to Chatvia.</p>
-                    </div>
-                    <div className="bg-white mt-[30px] md:w-[500px] py-8 mx-auto shadow-xl rounded-xl px-6">
-                        <p className='font-public text-left font-medium text-base text-red-500 mt-2'>{emailPasswordError}</p>
-                        <div className="mt-2 relative">
-                            <div className="text-left py-2">
-                                <label className='font-public font-medium text-xl text-[#343a40]'>Email</label>
-                            </div>
-                            <div className="flex items-center">
-                                <i className='bg-[#F8F9FA] font-public font-normal text-base text-[#343a40] rounded-l-xl p-5 border'><MdOutlineEmail /></i>
-                                <input onChange={handleEmail} className='border font-public font-normal text-base text-[#000] rounded-r-xl w-full py-4 px-6' type="email" placeholder='admin@themesbrand.com' />
-                            </div>
-                            <div className="">
-                                <p className='font-public text-left font-medium text-base text-red-500 mt-2'>{emailError}</p>
-                                {
-                                    emailError ? <i className="text-red-500 text-xl absolute top-[65px] block right-[10px]"><MdErrorOutline className='' /></i> : <i className="text-red-500 text-xl absolute hidden top-[65px] right-[10px]"><MdErrorOutline className='' /></i>
-                                }
-                            </div>
-                        </div>
-                        <div className="mt-2 relative">
-                            <div className="text-left py-2">
-                                <label className='font-public font-medium text-xl text-[#343a40]'>Password</label>
-                            </div>
-                            <div className="flex items-center">
-                                {
-                                    lock ? <i onClick={hanleLock} className='bg-[#F8F9FA] font-public font-normal text-base text-[#343a40] rounded-l-xl p-5 border'><CiUnlock /></i> : <i onClick={hanleLock} className='bg-[#F8F9FA] font-public font-normal text-base text-[#343a40] rounded-l-xl p-5 border'><CiLock /></i>
-                                }
-                                <input onChange={handlepassword} className='border font-public font-normal text-base text-[#000] rounded-r-xl w-full py-4 px-6' type={lock ? "text" : "password"} placeholder='*****' />
-                            </div>
-                            <p className='font-public text-end py-2 font-medium text-base text-[#A9AEB7]'><Link to='/forgot'>Forgot Password?</Link></p>
-                            <div className="">
-                                <p className='font-public text-left font-medium text-base text-red-500 mt-2'>{passwordError}</p>
-                                {
-                                    passwordError ? <i className="text-red-500 text-xl absolute top-[65px] block right-[10px]"><MdErrorOutline className='' /></i> : <i className="text-red-500 text-xl absolute hidden top-[65px] right-[10px]"><MdErrorOutline className='' /></i>
-                                }
-                            </div>
-                            <div onClick={handleGoole} className="flex w-64 mt-6 items-center border-2 border-border rounded-xl cursor-pointer">
-                                <div className="pl-6 mr-2">
-                                    <span><FcGoogle className='text-3xl' /></span>
-                                </div>
-                                <div className="">
-                                    <h3 className='font-nunito font-normal text-xl text-regText tracking-normal py-4'>Login with Google</h3>
-                                </div>
-                            </div>
-                        </div>
-                        {
-                            loading ?
-                                <Rings
-                                    visible={true}
-                                    height="100"
-                                    width="100"
-                                    color="#4fa94d"
-                                    ariaLabel="rings-loading"
-                                    wrapperStyle={{}}
-                                    wrapperClass="flex justify-center"
-                                />
-                                :
-                                <div onClick={handleSubmit} className="mt-[30px] font-public font-medium text-xl text-white bg-[#6159CB] py-3 rounded-xl w-full cursor-pointer">Sign In</div>
-                        }
+      })
+      .finally(() => setLoading(false));
+  };
 
-                    </div>
-                    <div className="mt-[40px]">
-                        <p className='font-public font-normal text-base mt-2 text-[#7a7f9a]'>Don't have an account ?  ? <Link to='/register' className='text-[#6159CB] text-semibold'>Sign Up</Link></p>
-                        <p className='font-public font-normal text-base mt-2 text-[#7a7f9a]'>© 2024 Chatvia. Crafted with  by Themesbrand</p>
-                    </div>
-                </div>
-            </section>
-        </>
-    )
-}
+  return (
+    <>
+      <ToastContainer position="top-center" theme="dark" />
 
-export default Login
+      <section className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="w-full max-w-lg bg-white shadow-2xl rounded-2xl p-8">
+          <div className="text-center">
+            <img src={logo} alt="logo" className="w-28 mx-auto mb-4" />
+
+            <h1 className="font-public font-semibold text-2xl text-[#343a40]">
+              Sign In
+            </h1>
+            <p className="text-[#7a7f9a] mt-1">
+              Continue to your dashboard
+            </p>
+          </div>
+
+          {errors.form && (
+            <p className="text-red-500 font-medium mt-4 mb-2">{errors.form}</p>
+          )}
+
+          {/* Email */}
+          <div className="mt-4">
+            <label className="font-public font-medium text-[18px]">Email</label>
+            <div className="flex items-center mt-3">
+              <span className="p-[14px]  bg-[#F8F9FA] border outline-none focus:outline-none rounded-l-[4px] text-xl">
+                <MdOutlineEmail />
+              </span>
+              <input
+                name="email"
+                onChange={handleChange}
+                className="border rounded-r-[4px] outline-none focus:outline-none w-full py-[12px] px-4 font-public"
+                type="email"
+                placeholder="admin@example.com"
+              />
+            </div>
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div className="mt-4">
+            <label className="font-public font-medium text-[18px]">
+              Password
+            </label>
+            <div className="flex items-center mt-3">
+              <span
+                onClick={() => setLock(!lock)}
+                className="p-[14px] bg-[#F8F9FA] border rounded-l-[4px] text-xl cursor-pointer"
+              >
+                {lock ? <CiUnlock /> : <CiLock />}
+              </span>
+
+              <input
+                name="password"
+                onChange={handleChange}
+                className="border rounded-r-[4px] outline-none focus:outline-none w-full py-[12px] px-4 font-public"
+                type={lock ? "text" : "password"}
+                placeholder="******"
+              />
+            </div>
+            {errors.password && (
+              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+            )}
+
+            <p className="text-right mt-1">
+              <Link to="/forgot" className="text-[#6159CB]">
+                Forgot Password?
+              </Link>
+            </p>
+
+          </div>
+
+          {/* Google Login */}
+          <div
+            onClick={handleGoogle}
+            className="flex items-center border-2 rounded-xl px-6 py-3 mt-6 cursor-pointer hover:bg-gray-50 transition"
+          >
+            <FcGoogle className="text-3xl mr-4" />
+            <span className="font-public text-lg">Login with Google</span>
+          </div>
+
+          {/* Sign In Button */}
+          {loading ? (
+            <div className="mt-6 flex justify-center">
+              <Rings height="80" width="80" color="#6059CC" visible />
+            </div>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              className="w-full mt-6 py-3 bg-[#6159CB] text-white rounded-xl text-xl font-medium shadow-lg hover:bg-[#544ebb] transition"
+            >
+              Sign In
+            </button>
+          )}
+
+          {/* Footer */}
+          <div className="text-center mt-6">
+            <p className="text-[#7a7f9a]">
+              Don't have an account?{" "}
+              <Link to="/register" className="text-[#6159CB] font-medium">
+                Sign Up
+              </Link>
+            </p>
+            <p className="text-[#7a7f9a] mt-2">© {new Date().getFullYear()} Chatvia</p>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+};
+
+export default Login;
